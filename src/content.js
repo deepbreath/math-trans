@@ -1,8 +1,8 @@
 const SELECTOR =
-  "p, li, h1, h2, h3, h4, h5, h6, button, label, summary, figcaption, td, th, [role='button'], [aria-label]";
+  "p, li, h1, h2, h3, h4, h5, h6, button, label, summary, figcaption, [role='button'], [aria-label]";
 
 const SKIP_SELECTOR =
-  "script, style, noscript, code, pre, textarea, input, select, option, svg, canvas, math, .math-trans-translation";
+  "script, style, noscript, code, pre, textarea, input, select, option, svg, canvas, math, table, .math-trans-translation";
 
 const EMBEDDED_TEXT_SELECTOR = "object, img, svg, math, [aria-label], [alt], [title]";
 
@@ -110,7 +110,14 @@ function collectCandidates() {
     if (node.closest(SKIP_SELECTOR) || node.dataset.mathTranslated === "true") {
       return false;
     }
+    if (isLikelyVisualOnlyNode(node)) {
+      return false;
+    }
     if (!isVisible(node) || hasTranslatedAncestor(node)) {
+      return false;
+    }
+
+    if (!hasHumanReadableEnglishText(node)) {
       return false;
     }
 
@@ -174,7 +181,7 @@ function collectReadableParts(node, parts) {
 }
 
 function getEmbeddedText(node) {
-  return normalizeMathText(
+  const text = normalizeMathText(
     [
       getElementLabel(node),
       getMathAnnotationText(node),
@@ -184,6 +191,8 @@ function getEmbeddedText(node) {
       .filter(Boolean)
       .join(" ")
   );
+
+  return shouldKeepEmbeddedMathText(text) ? text : "";
 }
 
 function getElementLabel(node) {
@@ -270,6 +279,61 @@ function isTranslatableText(text) {
   return /[A-Za-z]/.test(text);
 }
 
+function hasHumanReadableEnglishText(node) {
+  const textParts = [];
+  collectDirectHumanText(node, textParts);
+  return /[A-Za-z]/.test(normalizeText(textParts.join(" ")));
+}
+
+function collectDirectHumanText(node, parts) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    parts.push(node.textContent || "");
+    return;
+  }
+
+  if (!(node instanceof Element)) {
+    return;
+  }
+
+  if (node.matches(".math-trans-translation, script, style, noscript, object, img, svg, math")) {
+    return;
+  }
+
+  for (const child of node.childNodes) {
+    collectDirectHumanText(child, parts);
+  }
+}
+
+function isLikelyVisualOnlyNode(node) {
+  if (!node.matches?.("[aria-label], [role='button']")) {
+    return false;
+  }
+
+  if (node.matches("p, li, h1, h2, h3, h4, h5, h6, button, label, summary, figcaption")) {
+    return false;
+  }
+
+  const text = getNodeReadableText(node);
+  return isMathOnlyText(text) || text.length < 12;
+}
+
+function isMathOnlyText(text) {
+  return /^[\d\s.,:;+\-*/=()[\]{}<>%$#|√·×÷≤≥≠≈±^_]+$/.test(normalizeText(text));
+}
+
+function shouldKeepEmbeddedMathText(text) {
+  const normalized = normalizeText(text);
+  if (!normalized) {
+    return false;
+  }
+  if (!isMathOnlyText(normalized)) {
+    return true;
+  }
+
+  const numbers = normalized.match(/\d+(?:\.\d+)?/g) || [];
+  return normalized.length <= 24 && numbers.length <= 4;
+}
+
 function renderTranslation(node, translated) {
   if (node.querySelector(":scope > .math-trans-translation")) {
     return;
@@ -319,6 +383,8 @@ function normalizeMathText(text) {
   }
 
   value = value
+    .replace(/\\(?:quad|qquad|,|;|:|!)/g, " ")
+    .replace(/\\\\/g, " ")
     .replace(/\\cdot/g, "·")
     .replace(/\\times/g, "×")
     .replace(/\\div/g, "÷")
@@ -336,7 +402,9 @@ function normalizeMathText(text) {
     .replace(/(?:颜色)?(?:蓝色|红色|绿色|紫色|橙色|黄色|黑色|白色|灰色)(?=[\d√])/g, "")
     .replace(/(?<=[\d√])(?:颜色)?(?:蓝色|红色|绿色|紫色|橙色|黄色|黑色|白色|灰色)/g, "")
     .replace(/\\([a-zA-Z]+)/g, "$1")
-    .replace(/\\([^\s])/g, "$1");
+    .replace(/\\([^\s])/g, "$1")
+    .replace(/\b(?:quad|qquad|thinspace|enspace|hspace|vspace)\b/gi, " ")
+    .replace(/\s+([,.;:])/g, "$1");
 
   return normalizeText(value);
 }
