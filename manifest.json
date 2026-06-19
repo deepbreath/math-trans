@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Math Academy Bilingual Translator",
+  "description": "Show bilingual translations on mathacademy.com pages.",
+  "version": "0.1.0",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": [
+    "https://www.mathacademy.com/*",
+    "https://*.mathacademy.com/*",
+    "https://translate.google.com/*",
+    "https://translate.googleapis.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://api.openai.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.mathacademy.com/*", "https://*.mathacademy.com/*"],
+      "js": ["src/content.js"],
+      "css": ["src/content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Math Academy Translator",
+    "default_popup": "src/popup.html"
+  },
+  "options_page": "src/options.html"
+}

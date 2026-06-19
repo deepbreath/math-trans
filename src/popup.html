@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Math Academy Translator</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>双语翻译</h1>
+        <label class="switch">
+          <input id="enabled" type="checkbox">
+          <span>启用</span>
+        </label>
+      </header>
+
+      <label>
+        翻译服务
+        <select id="provider">
+          <option value="google-web">Google 免费</option>
+          <option value="gemini">Gemini API</option>
+          <option value="openai">OpenAI API</option>
+        </select>
+      </label>
+
+      <label>
+        目标语言
+        <input id="targetLang" type="text" placeholder="zh">
+      </label>
+
+      <label>
+        显示方式
+        <select id="displayMode">
+          <option value="below">原文下方</option>
+          <option value="inline">原文后方</option>
+        </select>
+      </label>
+
+      <section data-provider-fields="google-web">
+        <label>
+          Google 翻译地址
+          <input id="googleTranslateUrl" type="url" placeholder="https://translate.google.com">
+        </label>
+      </section>
+
+      <section data-provider-fields="gemini">
+        <label>
+          Gemini API Key
+          <input id="geminiApiKey" type="password" placeholder="AIza...">
+        </label>
+        <label>
+          Gemini 模型
+          <input id="geminiModel" type="text" placeholder="gemini-3.5-flash">
+        </label>
+      </section>
+
+      <section data-provider-fields="openai">
+        <label>
+          OpenAI API Key
+          <input id="openaiApiKey" type="password" placeholder="sk-...">
+        </label>
+        <label>
+          OpenAI 模型
+          <input id="openaiModel" type="text" placeholder="gpt-5.4-mini">
+        </label>
+      </section>
+
+      <button id="save" type="button">保存并刷新</button>
+      <p id="status" role="status"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
