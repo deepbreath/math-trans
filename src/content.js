@@ -4,6 +4,8 @@ const SELECTOR =
 const SKIP_SELECTOR =
   "script, style, noscript, code, pre, textarea, input, select, option, svg, canvas, math, .math-trans-translation";
 
+const EMBEDDED_TEXT_SELECTOR = "object, img, svg, math, [aria-label], [alt], [title]";
+
 let settings = null;
 let observer = null;
 let pendingTimer = null;
@@ -85,7 +87,7 @@ async function translateVisibleContent() {
     const source = node.dataset.mathTransSource;
     const translated = result.translations?.[source];
     if (translated) {
-      renderTranslation(node, translated);
+      renderTranslation(node, normalizeMathText(translated));
     } else {
       node.removeAttribute("data-math-translated");
       node.removeAttribute("data-math-trans-source");
@@ -112,7 +114,7 @@ function collectCandidates() {
       return false;
     }
 
-    const text = normalizeText(node.getAttribute("aria-label") || node.innerText);
+    const text = getNodeReadableText(node);
     if (!isTranslatableText(text)) {
       return false;
     }
@@ -128,9 +130,119 @@ function hasTranslatedAncestor(node) {
   if (!parent) {
     return false;
   }
-  const parentText = normalizeText(parent.dataset.mathTransSource || parent.innerText);
-  const nodeText = normalizeText(node.innerText);
+  const parentText = normalizeText(parent.dataset.mathTransSource || getNodeReadableText(parent));
+  const nodeText = getNodeReadableText(node);
   return parentText.includes(nodeText);
+}
+
+function getNodeReadableText(node) {
+  const directLabel = getElementLabel(node);
+  if (directLabel && isMostlyNonTextContainer(node)) {
+    return directLabel;
+  }
+
+  const parts = [];
+  collectReadableParts(node, parts);
+  return normalizeText(parts.join(" "));
+}
+
+function collectReadableParts(node, parts) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    parts.push(node.textContent || "");
+    return;
+  }
+
+  if (!(node instanceof HTMLElement || node instanceof SVGElement || isMathElement(node))) {
+    return;
+  }
+
+  if (node.matches?.(".math-trans-translation, script, style, noscript")) {
+    return;
+  }
+
+  if (node.matches?.(EMBEDDED_TEXT_SELECTOR)) {
+    const embeddedText = getEmbeddedText(node);
+    if (embeddedText) {
+      parts.push(embeddedText);
+      return;
+    }
+  }
+
+  for (const child of node.childNodes) {
+    collectReadableParts(child, parts);
+  }
+}
+
+function getEmbeddedText(node) {
+  return normalizeMathText(
+    [
+      getElementLabel(node),
+      getMathAnnotationText(node),
+      getObjectDocumentText(node),
+      getSvgTitleText(node)
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+}
+
+function getElementLabel(node) {
+  if (!(node instanceof Element)) {
+    return "";
+  }
+
+  return normalizeMathText(
+    node.getAttribute("aria-label") ||
+      node.getAttribute("alt") ||
+      node.getAttribute("title") ||
+      node.getAttribute("data-value") ||
+      node.getAttribute("data-text") ||
+      node.getAttribute("data-latex") ||
+      node.getAttribute("data-tex") ||
+      ""
+  );
+}
+
+function getMathAnnotationText(node) {
+  if (!(node instanceof Element)) {
+    return "";
+  }
+
+  const annotation = node.querySelector?.("annotation, annotation-xml");
+  return normalizeMathText(annotation?.textContent || "");
+}
+
+function getObjectDocumentText(node) {
+  if (!(node instanceof HTMLObjectElement)) {
+    return "";
+  }
+
+  try {
+    const doc = node.contentDocument;
+    return normalizeMathText(doc?.body?.innerText || doc?.documentElement?.textContent || "");
+  } catch {
+    return "";
+  }
+}
+
+function getSvgTitleText(node) {
+  if (!(node instanceof SVGElement)) {
+    return "";
+  }
+
+  return normalizeMathText(
+    Array.from(node.querySelectorAll("title, desc"))
+      .map((item) => item.textContent || "")
+      .join(" ")
+  );
+}
+
+function isMostlyNonTextContainer(node) {
+  return node.matches?.("object, img, svg, math") || false;
+}
+
+function isMathElement(node) {
+  return typeof MathMLElement !== "undefined" && node instanceof MathMLElement;
 }
 
 function isVisible(node) {
@@ -185,6 +297,48 @@ function showStatus(message) {
 
 function normalizeText(text) {
   return String(text || "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeMathText(text) {
+  let value = normalizeText(text);
+  if (!value) {
+    return "";
+  }
+
+  for (let index = 0; index < 4; index += 1) {
+    value = value
+      .replace(/\\phantom\{[^{}]*\}/g, "")
+      .replace(/\\color\{[^{}]*\}\{([^{}]*)\}/g, "$1")
+      .replace(/\\color\{[^{}]*\}/g, "")
+      .replace(/\\mathbin\{([^{}]*)\}/g, "$1")
+      .replace(/\\mathbf\{([^{}]*)\}/g, "$1")
+      .replace(/\\mathrm\{([^{}]*)\}/g, "$1")
+      .replace(/\\text\{([^{}]*)\}/g, "$1")
+      .replace(/\\sqrt\{([^{}]*)\}/g, "√$1")
+      .replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, "$1/$2");
+  }
+
+  value = value
+    .replace(/\\cdot/g, "·")
+    .replace(/\\times/g, "×")
+    .replace(/\\div/g, "÷")
+    .replace(/\\leq/g, "≤")
+    .replace(/\\geq/g, "≥")
+    .replace(/\\neq/g, "≠")
+    .replace(/\\approx/g, "≈")
+    .replace(/\\pm/g, "±")
+    .replace(/\\left|\\right/g, "")
+    .replace(/\^\{([^{}]*)\}/g, "^$1")
+    .replace(/_\{([^{}]*)\}/g, "_$1")
+    .replace(/[{}]/g, "")
+    .replace(/\bcolor(?:blue|red|green|purple|orange|yellow|black|white|gray|grey)?(?=[\d√])/gi, "")
+    .replace(/\b(?:blue|red|green|purple|orange|yellow|black|white|gray|grey)color(?=[\d√])/gi, "")
+    .replace(/(?:颜色)?(?:蓝色|红色|绿色|紫色|橙色|黄色|黑色|白色|灰色)(?=[\d√])/g, "")
+    .replace(/(?<=[\d√])(?:颜色)?(?:蓝色|红色|绿色|紫色|橙色|黄色|黑色|白色|灰色)/g, "")
+    .replace(/\\([a-zA-Z]+)/g, "$1")
+    .replace(/\\([^\s])/g, "$1");
+
+  return normalizeText(value);
 }
 
 function sendMessage(message) {
