@@ -3,7 +3,7 @@
   "name": "Math Academy Bilingual Translator",
   "description": "Show bilingual translations on mathacademy.com pages.",
   "version": "0.1.0",
-  "permissions": ["activeTab", "scripting", "storage"],
+  "permissions": ["activeTab", "storage"],
   "host_permissions": [
     "https://www.mathacademy.com/*",
     "https://*.mathacademy.com/*",
@@ -25,7 +25,17 @@
   ],
   "action": {
     "default_title": "Math Academy Translator",
-    "default_popup": "src/popup.html"
+    "default_popup": "src/popup.html",
+    "default_icon": {
+      "16": "assets/icon-16.png",
+      "48": "assets/icon-48.png",
+      "128": "assets/icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "assets/icon-16.png",
+    "48": "assets/icon-48.png",
+    "128": "assets/icon-128.png"
   },
   "options_page": "src/options.html"
 }
